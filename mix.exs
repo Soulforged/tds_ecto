@@ -21,7 +21,7 @@ defmodule TDS.Ecto.Mixfile do
 
   defp deps do
     [
-      {:ecto, "~> 2.0.0-rc"},
+      {:ecto, "~> 2.0.6"},
       {:tds, github: "livehelpnow/tds", branch: "ecto2"},
       {:poison, only: :test}
     ]

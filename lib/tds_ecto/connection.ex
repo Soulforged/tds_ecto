@@ -784,19 +784,18 @@ if Code.ensure_loaded?(Tds) do
       end
     end
 
-    def execute_ddl({command, %Index{}=index}, repo) when command in @creates do
+    def execute_ddl({command, %Index{}=index} = ddl, nil) when command in @creates do
+      do_execute_ddl(ddl)
+    end
+
+    def execute_ddl({command, %Index{}=index} = ddl, repo) when command in @creates do
       filter =
       if (repo.config[:filter_null_on_unique_indexes] == true and index.unique) do
         " WHERE #{Enum.map_join(index.columns, " AND ", fn(column) -> "#{column} IS NOT NULL" end)}"
       else
         ""
       end
-      prefix = if command == :create_if_not_exists, do: "IF NOT EXISTS (" <> ddl_exists(index) <> ") BEGIN ", else: ""
-      postfix = if command == :create_if_not_exists, do: "END", else: ""
-      assemble([prefix, "CREATE#{if index.unique, do: " UNIQUE"} INDEX",
-                quote_name(index.name), " ON ", quote_name(index.table),
-                " (#{Enum.map_join(index.columns, ", ", &index_expr/1)})",
-                filter, postfix])
+      do_execute_ddl(command, filter)
     end
 
     def execute_ddl({command, %Index{}=index}, _repo) do
@@ -809,6 +808,16 @@ if Code.ensure_loaded?(Tds) do
 
     def execute_ddl(keyword, _repo) when is_list(keyword),
       do: error!(nil, "MSSQL adapter does not support keyword lists in execute")
+
+    defp do_execute_ddl({command, %Index{}=index}, filter \\ "") when command in @creates do
+      prefix = if command == :create_if_not_exists, do: "IF NOT EXISTS (" <> ddl_exists(index) <> ") BEGIN ", else: ""
+      postfix = if command == :create_if_not_exists, do: "END", else: ""
+      assemble([prefix, "CREATE#{if index.unique, do: " UNIQUE"} INDEX",
+                quote_name(index.name), " ON ", quote_table(index.prefix, index.table),
+                " (#{Enum.map_join(index.columns, ", ", &index_expr/1)})",
+                filter, postfix])
+      |> String.trim
+    end
 
     defp column_definitions(table, columns) do
       Enum.map_join(columns, ", ", &column_definition(table, &1))
@@ -832,7 +841,7 @@ if Code.ensure_loaded?(Tds) do
     defp column_change(table, {:add, name, %Reference{} = ref, opts}) do
       assemble([
         "ADD", quote_name(name), reference_column_type(ref.type, opts), column_options(table, name, ref.type, opts),
-        default_expr(opts, name, ref.type), reference_expr(ref, table, name)
+        default_expr(opts, name, ref.type), reference_expr(ref, table, name), constraint_expr(ref, table, name)
       ])
     end
 

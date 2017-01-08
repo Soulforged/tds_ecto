@@ -117,11 +117,11 @@ defmodule Tds.Ecto.TdsTest do
     query = Model |> limit([r], 3) |> select([], 0) |> normalize
     assert SQL.all(query) == ~s{SELECT TOP(3) 0 FROM [model] AS m0}
 
-    query = Model |> order_by([r], r.x) |> offset([r], 5) |> select([], 0) |> normalize
-    assert SQL.all(query) == ~s{SELECT 0 FROM [model] AS m0 ORDER BY m0.[x] OFFSET 5 ROW}
+    query = Model |> order_by([r], r.x) |> offset([r], 5) |> limit([r], 3) |> select([], 0) |> normalize
+    assert SQL.all(query) == ~s{SELECT 0 FROM [model] AS m0 ORDER BY m0.[x] OFFSET 5 ROW FETCH NEXT 3 ROWS ONLY}
 
     query = Model |> order_by([r], r.x) |> offset([r], 5) |> limit([r], 3) |> select([], 0) |> normalize
-    assert SQL.all(query) == ~s{SELECT TOP(3) 0 FROM [model] AS m0 ORDER BY m0.[x] OFFSET 5 ROW}
+    assert SQL.all(query) == ~s{SELECT 0 FROM [model] AS m0 ORDER BY m0.[x] OFFSET 5 ROW FETCH NEXT 3 ROWS ONLY}
 
     query = Model |> offset([r], 5) |> limit([r], 3) |> select([], 0) |> normalize
     assert_raise Ecto.QueryError, fn ->
@@ -305,7 +305,7 @@ defmodule Tds.Ecto.TdsTest do
     # TODO:
     # nvarchar(max) conversion
 
-    query = from(m in Model, update: [set: [x: 0, y: "123"]]) |> normalize(:update_all)
+    query = from(m in Model, update: [set: [x: 0, y: 123]]) |> normalize(:update_all)
     assert SQL.update_all(query) ==
            ~s{UPDATE m0 SET m0.[x] = 0, m0.[y] = 123 FROM [model] AS m0}
 
@@ -610,31 +610,7 @@ defmodule Tds.Ecto.TdsTest do
                 {:remove, :summary}]}
 
     assert SQL.execute_ddl(alter) == """
-    ALTER TABLE [foo].[posts] ADD [title] nvarchar(100) NOT NULL ;
-    IF (OBJECT_ID('DF_title', 'D') IS NOT NULL)
-    BEGIN ALTER TABLE [posts]
-    DROP CONSTRAINT DF_title END;
-    ALTER TABLE [posts] ADD CONSTRAINT DF_title DEFAULT N'Untitled' FOR [title];
-    ALTER TABLE [foo].[posts] ADD [author_id] bigint NULL
-    CONSTRAINT [posts_author_id_fkey] FOREIGN KEY (author_id)
-    REFERENCES [author]([id]) ;
-    IF (OBJECT_ID('DF_author_id', 'D') IS NOT NULL)
-    BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_author_id END;
-    ALTER TABLE [foo].[posts] ALTER COLUMN [price] numeric(8,2) NULL ;
-    IF (OBJECT_ID('DF_price', 'D') IS NOT NULL)
-    BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_price END;
-    ALTER TABLE [foo].[posts] ALTER COLUMN [cost] integer NOT NULL ;
-    IF (OBJECT_ID('DF_cost', 'D') IS NOT NULL)
-    BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_cost END;
-    ALTER TABLE [posts] ADD CONSTRAINT DF_cost DEFAULT NULL FOR [cost];
-    ALTER TABLE [foo].[posts] ALTER COLUMN [permalink_id] bigint NOT NULL ;
-    IF (OBJECT_ID('[posts_permalink_id_fkey]', 'F') IS NOT NULL) BEGIN
-    ALTER TABLE [posts] DROP CONSTRAINT [posts_permalink_id_fkey] END;
-    ALTER TABLE [posts] ADD CONSTRAINT [posts_permalink_id_fkey] FOREIGN KEY ([permalink_id])
-    REFERENCES [permalinks]([id]) ;
-    IF (OBJECT_ID('DF_permalink_id', 'D') IS NOT NULL)
-    BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_permalink_id END;
-    ALTER TABLE [foo].[posts] DROP COLUMN [summary]
+    ALTER TABLE [foo].[posts] ADD [title] nvarchar(100) NOT NULL CONSTRAINT DF_title DEFAULT N'Untitled'; ALTER TABLE [foo].[posts] ADD [author_id] bigint NULL CONSTRAINT [posts_author_id_fkey] FOREIGN KEY (author_id) REFERENCES [author]([id]) ; IF (OBJECT_ID('[posts_author_id_fkey]', 'F') IS NOT NULL) BEGIN ALTER TABLE [posts] DROP CONSTRAINT [posts_author_id_fkey] END; ALTER TABLE [posts] ADD CONSTRAINT [posts_author_id_fkey] FOREIGN KEY ([author_id]) REFERENCES [author]([id]); ALTER TABLE [foo].[posts] ALTER COLUMN [price] numeric(8,2) NULL ; IF (OBJECT_ID('DF_price', 'D') IS NOT NULL) BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_price END; ALTER TABLE [foo].[posts] ALTER COLUMN [cost] integer NOT NULL ; IF (OBJECT_ID('DF_cost', 'D') IS NOT NULL) BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_cost END; ALTER TABLE [posts] ADD  FOR [cost]; ALTER TABLE [foo].[posts] ALTER COLUMN [permalink_id] bigint NOT NULL ; IF (OBJECT_ID('[posts_permalink_id_fkey]', 'F') IS NOT NULL) BEGIN ALTER TABLE [posts] DROP CONSTRAINT [posts_permalink_id_fkey] END; ALTER TABLE [posts] ADD CONSTRAINT [posts_permalink_id_fkey] FOREIGN KEY ([permalink_id]) REFERENCES [permalinks]([id]) ; IF (OBJECT_ID('DF_permalink_id', 'D') IS NOT NULL) BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_permalink_id END; ALTER TABLE [foo].[posts] IF (OBJECT_ID('DF_summary', 'D') IS NOT NULL) BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_summary END; DROP COLUMN [summary]
     """ |> remove_newlines
   end
 
@@ -644,10 +620,7 @@ defmodule Tds.Ecto.TdsTest do
 
     assert SQL.execute_ddl(alter) == """
     ALTER TABLE [posts] ADD [comment_id] bigint NULL CONSTRAINT [posts_comment_id_fkey] FOREIGN KEY (comment_id) REFERENCES [comments]([id]) ;
-    IF (OBJECT_ID('DF_comment_id', 'D') IS NOT NULL)
-    BEGIN
-    ALTER TABLE [posts] DROP CONSTRAINT DF_comment_id
-    END
+    IF (OBJECT_ID('[posts_comment_id_fkey]', 'F') IS NOT NULL) BEGIN ALTER TABLE [posts] DROP CONSTRAINT [posts_comment_id_fkey] END; ALTER TABLE [posts] ADD CONSTRAINT [posts_comment_id_fkey] FOREIGN KEY ([comment_id]) REFERENCES [comments]([id])
     """ |> remove_newlines
   end
 
