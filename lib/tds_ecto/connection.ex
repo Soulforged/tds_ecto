@@ -795,7 +795,12 @@ if Code.ensure_loaded?(Tds) do
       else
         ""
       end
-      do_execute_ddl(command, filter)
+      prefix = if command == :create_if_not_exists, do: "IF NOT EXISTS (" <> ddl_exists(index) <> ") BEGIN ", else: ""
+      postfix = if command == :create_if_not_exists, do: "END", else: ""
+      assemble([prefix, "CREATE#{if index.unique, do: " UNIQUE"} INDEX",
+                quote_name(index.name), " ON ", quote_name(index.table),
+                " (#{Enum.map_join(index.columns, ", ", &index_expr/1)})",
+                filter, postfix])
     end
 
     def execute_ddl({command, %Index{}=index}, _repo) do
