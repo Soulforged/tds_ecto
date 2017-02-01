@@ -309,19 +309,33 @@ if Code.ensure_loaded?(Tds) do
       assemble([delete, from, join, where])
     end
 
-    def insert(prefix, table, fields, returning) do
-      values =
-        if fields == [] do
-          returning(returning, "INSERTED") <>
-          "DEFAULT VALUES"
-        else
-          "(" <> Enum.map_join(fields, ", ", &quote_name/1) <> ")" <>
-          " " <> returning(returning, "INSERTED") <>
-          "VALUES (" <> Enum.map_join(1..length(fields), ", ", &"@#{&1}") <> ")"
-        end
-      "INSERT INTO #{quote_table(prefix, table)} " <> values
-    end
-    def insert(prefix, table, header, rows, returning) do
+    # def insert(prefix, table, fields, returning) do
+    #   values =
+    #     if fields == [] do
+    #       returning(returning, "INSERTED") <>
+    #       "DEFAULT VALUES"
+    #     else
+    #       "(" <> Enum.map_join(fields, ", ", &quote_name/1) <> ")" <>
+    #       " " <> returning(returning, "INSERTED") <>
+    #       "VALUES (" <> Enum.map_join(1..length(fields), ", ", &"@#{&1}") <> ")"
+    #     end
+    #   "INSERT INTO #{quote_table(prefix, table)} " <> values
+    # end
+
+    # def insert(prefix, table, header, rows, returning) do
+    #   values =
+    #   if header == [] do
+    #     returning(returning, "INSERTED") <>
+    #       "DEFAULT VALUES"
+    #   else
+    #     "(" <> Enum.map_join(header, ", ", &quote_name/1) <> ")" <>
+    #       " " <> returning(returning, "INSERTED") <>
+    #       "VALUES " <> insert_all(rows, 1, "")
+    #   end
+    #   "INSERT INTO #{quote_table(prefix, table)} " <> values
+    # end
+
+    def insert(prefix, table, header, rows, on_conflict, returning) do
       values =
       if header == [] do
         returning(returning, "INSERTED") <>
@@ -331,7 +345,17 @@ if Code.ensure_loaded?(Tds) do
           " " <> returning(returning, "INSERTED") <>
           "VALUES " <> insert_all(rows, 1, "")
       end
-      "INSERT INTO #{quote_table(prefix, table)} " <> values
+
+      IO.iodata_to_binary(["INSERT INTO ", quote_table(prefix, table), insert_as(on_conflict),
+                           values, on_conflict(on_conflict, header) | returning(returning)])
+    end
+
+    defp insert_as({%{from: from} = query, _, _}) do
+      {_, name} = get_source(%{query | joins: []}, create_names(query), 0, from)
+      [" AS " | name]
+    end
+    defp insert_as({_, _, _}) do
+      []
     end
 
 		defp insert_all([row|rows], counter, acc) do
@@ -1063,5 +1087,14 @@ if Code.ensure_loaded?(Tds) do
     defp error!(query, message) do
       raise Ecto.QueryError, query: query, message: message
     end
+
+    defp on_conflict({:raise, _, []}, _header),
+      do: []
+    defp on_conflict({:nothing, _, targets}, _header),
+      do: [" ON CONFLICT ", conflict_target(targets) | "DO NOTHING"]
+    defp on_conflict({:replace_all, _, targets}, header),
+      do: [" ON CONFLICT ", conflict_target(targets), "DO " | replace_all(header)]
+    defp on_conflict({query, _, targets}, _header),
+      do: [" ON CONFLICT ", conflict_target(targets), "DO " | update_all(query, "UPDATE SET ")]
   end
 end
