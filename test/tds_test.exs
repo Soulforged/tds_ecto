@@ -9,7 +9,7 @@ defmodule Tds.Ecto.TdsTest do
   alias Tds.Ecto.Connection, as: SQL
 
   defmodule Model do
-    use Ecto.Model
+    use Ecto.Schema
 
     schema "model" do
       field :x, :integer
@@ -27,7 +27,7 @@ defmodule Tds.Ecto.TdsTest do
   end
 
   defmodule Model2 do
-    use Ecto.Model
+    use Ecto.Schema
 
     schema "model2" do
       belongs_to :post, Tds.Ecto.TdsTest.Model,
@@ -37,7 +37,7 @@ defmodule Tds.Ecto.TdsTest do
   end
 
   defmodule Model3 do
-    use Ecto.Model
+    use Ecto.Schema
 
     schema "model3" do
       field :binary, :binary
@@ -45,8 +45,8 @@ defmodule Tds.Ecto.TdsTest do
   end
 
   defp normalize(query, operation \\ :all) do
-    {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Tds.Ecto)
-    Ecto.Query.Planner.normalize(query, operation, Tds.Ecto)
+    {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Tds.Ecto, 0)
+    Ecto.Query.Planner.normalize(query, operation, Tds.Ecto, 0)
   end
 
   test "from" do
@@ -432,7 +432,7 @@ defmodule Tds.Ecto.TdsTest do
 
   test "insert" do
     query = SQL.insert(nil, "model", [:x, :y], [])
-    assert query == ~s{INSERT INTO [model] ([x], [y]) VALUES (@1, @2)}
+    assert query == ~s{INSERT INTO [model] ([x],[y]) VALUES (@1,@2)}
 
     query = SQL.insert(nil, "model", [], [:id])
     assert query == ~s{INSERT INTO [model] OUTPUT INSERTED.[id] DEFAULT VALUES}

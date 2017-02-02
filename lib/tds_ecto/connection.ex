@@ -284,11 +284,11 @@ if Code.ensure_loaded?(Tds) do
       assemble([select, from, join, where, group_by, having, order_by, offset])
     end
 
-    def update_all(query) do
+    def update_all(query, prefix \\ nil) do
       sources = create_names(query)
       {table, name, _model} = elem(sources, 0)
 
-      update = "UPDATE #{name}"
+      update = prefix || "UPDATE #{name}"
       fields = update_fields(query, sources)
       from   = "FROM #{table} AS #{name}"
       join   = join(query, sources)
@@ -309,61 +309,61 @@ if Code.ensure_loaded?(Tds) do
       assemble([delete, from, join, where])
     end
 
-    # def insert(prefix, table, fields, returning) do
-    #   values =
-    #     if fields == [] do
-    #       returning(returning, "INSERTED") <>
-    #       "DEFAULT VALUES"
-    #     else
-    #       "(" <> Enum.map_join(fields, ", ", &quote_name/1) <> ")" <>
-    #       " " <> returning(returning, "INSERTED") <>
-    #       "VALUES (" <> Enum.map_join(1..length(fields), ", ", &"@#{&1}") <> ")"
-    #     end
-    #   "INSERT INTO #{quote_table(prefix, table)} " <> values
-    # end
-
-    # def insert(prefix, table, header, rows, returning) do
-    #   values =
-    #   if header == [] do
-    #     returning(returning, "INSERTED") <>
-    #       "DEFAULT VALUES"
-    #   else
-    #     "(" <> Enum.map_join(header, ", ", &quote_name/1) <> ")" <>
-    #       " " <> returning(returning, "INSERTED") <>
-    #       "VALUES " <> insert_all(rows, 1, "")
-    #   end
-    #   "INSERT INTO #{quote_table(prefix, table)} " <> values
-    # end
+    def insert(prefix, table, fields, returning) do
+      insert(prefix, table, fields, [fields], {:raise, [], []}, returning)
+    end
 
     def insert(prefix, table, header, rows, on_conflict, returning) do
       values =
       if header == [] do
-        returning(returning, "INSERTED") <>
-          "DEFAULT VALUES"
+        returning(returning, "INSERTED") <> "DEFAULT VALUES"
       else
-        "(" <> Enum.map_join(header, ", ", &quote_name/1) <> ")" <>
-          " " <> returning(returning, "INSERTED") <>
-          "VALUES " <> insert_all(rows, 1, "")
+        IO.iodata_to_binary([?(, intersperse_map(header, ?,, &quote_name/1), ") VALUES " | insert_all(rows, 1)])
       end
 
-      IO.iodata_to_binary(["INSERT INTO ", quote_table(prefix, table), insert_as(on_conflict),
-                           values, on_conflict(on_conflict, header) | returning(returning)])
+      assemble(["INSERT INTO", quote_table(prefix, table), values,
+        on_conflict(on_conflict, header)])
     end
 
     defp insert_as({%{from: from} = query, _, _}) do
       {_, name} = get_source(%{query | joins: []}, create_names(query), 0, from)
       [" AS " | name]
     end
-    defp insert_as({_, _, _}) do
-      []
+
+    defp insert_as({_, _, _}), do: []
+
+    defp get_source(query, sources, ix, source) do
+      {expr, name, _schema} = elem(sources, ix)
+      {expr || paren_expr(source, sources, query), name}
+    end
+
+    defp paren_expr(expr, sources, query) do
+      [?(, expr(expr, sources, query), ?)]
+    end
+
+    defp insert_all(rows, counter) do
+      intersperse_reduce(rows, ?,, counter, fn row, counter ->
+        {row, counter} = insert_each(row, counter)
+        {[?(, row, ?)], counter}
+      end)
+      |> elem(0)
     end
 
 		defp insert_all([row|rows], counter, acc) do
       {counter, row} = insert_each(row, counter, "")
       insert_all(rows, counter, acc <> ",(" <> row <> ")")
     end
-    defp insert_all([], _counter, "," <> acc) do
-      acc
+
+    defp insert_all([], _counter, "," <> acc), do: acc
+    defp insert_all([], _counter, acc), do: acc
+
+    defp insert_each(values, counter) do
+      intersperse_reduce(values, ?,, counter, fn
+        nil, counter ->
+          {"DEFAULT", counter}
+        _, counter ->
+          {[?@ | Integer.to_string(counter)], counter + 1}
+      end)
     end
 
     defp insert_each([nil|t], counter, acc),
@@ -545,7 +545,7 @@ if Code.ensure_loaded?(Tds) do
     defp boolean(name, query_exprs, sources, query) do
       name <> " " <>
         Enum.map_join(query_exprs, " AND ", fn
-          %QueryExpr{expr: expr} ->
+          %Query.BooleanExpr{expr: expr} ->
             case expr do
               true -> "(1 = 1)"
               false -> "(0 = 1)"
@@ -707,10 +707,33 @@ if Code.ensure_loaded?(Tds) do
       expr(count, sources, query)
     end
 
-    defp returning([], _verb),
-      do: ""
+    defp returning([]), do: []
+    defp returning(returning),
+      do: [" RETURNING " | intersperse_map(returning, ", ", &quote_name/1)]
+
+    defp returning([], _verb), do: ""
     defp returning(returning, verb) do
       "OUTPUT " <> Enum.map_join(returning, ", ", fn(arg) -> "#{verb}.#{quote_name(arg)}" end) <> " "
+    end
+
+    defp intersperse_map(list, separator, mapper, acc \\ [])
+    defp intersperse_map([], _separator, _mapper, acc),
+      do: acc
+    defp intersperse_map([elem], _separator, mapper, acc),
+      do: [acc | mapper.(elem)]
+    defp intersperse_map([elem | rest], separator, mapper, acc),
+      do: intersperse_map(rest, separator, mapper, [acc, mapper.(elem), separator])
+
+    defp intersperse_reduce(list, separator, user_acc, reducer, acc \\ [])
+    defp intersperse_reduce([], _separator, user_acc, _reducer, acc),
+      do: {acc, user_acc}
+    defp intersperse_reduce([elem], _separator, user_acc, reducer, acc) do
+      {elem, user_acc} = reducer.(elem, user_acc)
+      {[acc | elem], user_acc}
+    end
+    defp intersperse_reduce([elem | rest], separator, user_acc, reducer, acc) do
+      {elem, user_acc} = reducer.(elem, user_acc)
+      intersperse_reduce(rest, separator, user_acc, reducer, [acc, elem, separator])
     end
 
     # Brute force find unique name
@@ -1043,17 +1066,11 @@ if Code.ensure_loaded?(Tds) do
     defp reference_on_delete(_), do: ""
 
     ## Helpers
-    defp quote_table(nil, name),
-      do: quote_name(name)
+    defp quote_table(nil, name), do: quote_name(name)
+    defp quote_table(prefix, name), do: quote_name(prefix) <> "." <> quote_name(name)
 
-    defp quote_table(prefix, name),
-      do: quote_name(prefix) <> "." <> quote_name(name)
-
-    defp quote_name(name) when is_atom(name),
-      do: quote_name(Atom.to_string(name))
-
-    defp quote_name(name),
-      do: "[#{name}]"
+    defp quote_name(name) when is_atom(name), do: quote_name(Atom.to_string(name))
+    defp quote_name(name), do: "[#{name}]"
 
     defp assemble(list) do
       list
@@ -1096,5 +1113,17 @@ if Code.ensure_loaded?(Tds) do
       do: [" ON CONFLICT ", conflict_target(targets), "DO " | replace_all(header)]
     defp on_conflict({query, _, targets}, _header),
       do: [" ON CONFLICT ", conflict_target(targets), "DO " | update_all(query, "UPDATE SET ")]
+
+    defp conflict_target([]), do: []
+    defp conflict_target(targets),
+      do: [?(, intersperse_map(targets, ?,, &quote_name/1), ?), ?\s]
+
+    defp replace_all(header) do
+      ["UPDATE SET " |
+       intersperse_map(header, ?,, fn field ->
+         quoted = quote_name(field)
+         [quoted, " = ", "EXCLUDED." | quoted]
+       end)]
+    end
   end
 end
