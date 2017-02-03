@@ -521,13 +521,8 @@ if Code.ensure_loaded?(Tds) do
     end
 
     defp limit(%Query{limit: nil}, _sources), do: ""
-    defp limit(%Query{limit: %QueryExpr{expr: expr}} = query, sources) do
-      case Map.get(query, :offset) do
-        nil -> "TOP(" <> expr(expr, sources, query) <> ") "
-        _ -> ""
-      end
-
-    end
+    defp limit(%Query{limit: %QueryExpr{expr: expr}} = query, sources), do: "TOP(" <> expr(expr, sources, query) <> ") "
+    # defp limit(%Query{limit: %QueryExpr{expr: expr}, offset: _} = query, sources), do: ""
 
     defp offset(%Query{offset: nil}, _sources), do: nil
     defp offset(%Query{offset: %QueryExpr{expr: offset_expr}, limit: %QueryExpr{expr: limit_expr}} = query, sources) do

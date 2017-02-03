@@ -263,20 +263,35 @@ defmodule Tds.Ecto.TdsTest do
 
   test "interpolated values" do
     query = Model
-            |> select([], ^0)
-            |> join(:inner, [], Model2, ^true)
-            |> join(:inner, [], Model2, ^false)
-            |> where([], ^true)
-            |> where([], ^false)
-            |> group_by([], ^1)
-            |> group_by([], ^2)
-            |> having([], ^true)
-            |> having([], ^false)
+            |> select([m], {m.id, ^true})
+            |> join(:inner, [], Model2, fragment("?", ^true))
+            |> join(:inner, [], Model2, fragment("?", ^false))
+            |> where([], fragment("?", ^true))
+            |> where([], fragment("?", ^false))
+            |> having([], fragment("?", ^true))
+            |> having([], fragment("?", ^false))
+            |> group_by([], fragment("?", ^1))
+            |> group_by([], fragment("?", ^2))
             |> order_by([], fragment("?", ^3))
             |> order_by([], ^:x)
             |> limit([], ^4)
             |> offset([], ^5)
             |> normalize
+    # query = Model
+    #         |> select([], ^0)
+    #         |> join(:inner, [], Model2, ^true)
+    #         |> join(:inner, [], Model2, ^false)
+    #         |> where([], ^true)
+    #         |> where([], ^false)
+    #         |> group_by([], ^1)
+    #         |> group_by([], ^2)
+    #         |> having([], ^true)
+    #         |> having([], ^false)
+    #         |> order_by([], fragment("?", ^3))
+    #         |> order_by([], ^:x)
+    #         |> limit([], ^4)
+    #         |> offset([], ^5)
+    #         |> normalize
 
     result =
       "SELECT TOP(@11) @1 FROM [model] AS m0 INNER JOIN [model2] AS m1 ON @2 " <>
