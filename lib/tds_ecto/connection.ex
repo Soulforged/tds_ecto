@@ -1081,6 +1081,8 @@ if Code.ensure_loaded?(Tds) do
     defp ecto_to_db(:string),     do: "nvarchar"
     defp ecto_to_db(:binary),     do: "varbinary"
     defp ecto_to_db(:datetime),   do: "datetime2"
+    defp ecto_to_db(:naive_datetime),   do: "datetime"
+    defp ecto_to_db(:utc_datetime),   do: "datetime2"
     defp ecto_to_db(:map),        do: "nvarchar"
     defp ecto_to_db(:boolean),    do: "bit"
     defp ecto_to_db({:map, :string}),    do: "nvarchar"
