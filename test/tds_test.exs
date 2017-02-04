@@ -263,7 +263,7 @@ defmodule Tds.Ecto.TdsTest do
 
   test "interpolated values" do
     query = Model
-            |> select([m], {m.id, ^true})
+            |> select([m], {0, ^true})
             |> join(:inner, [], Model2, fragment("?", ^true))
             |> join(:inner, [], Model2, fragment("?", ^false))
             |> where([], fragment("?", ^true))
@@ -277,27 +277,12 @@ defmodule Tds.Ecto.TdsTest do
             |> limit([], ^4)
             |> offset([], ^5)
             |> normalize
-    # query = Model
-    #         |> select([], ^0)
-    #         |> join(:inner, [], Model2, ^true)
-    #         |> join(:inner, [], Model2, ^false)
-    #         |> where([], ^true)
-    #         |> where([], ^false)
-    #         |> group_by([], ^1)
-    #         |> group_by([], ^2)
-    #         |> having([], ^true)
-    #         |> having([], ^false)
-    #         |> order_by([], fragment("?", ^3))
-    #         |> order_by([], ^:x)
-    #         |> limit([], ^4)
-    #         |> offset([], ^5)
-    #         |> normalize
 
     result =
-      "SELECT TOP(@11) @1 FROM [model] AS m0 INNER JOIN [model2] AS m1 ON @2 " <>
+      "SELECT @1 FROM [model] AS m0 INNER JOIN [model2] AS m1 ON @2 " <>
       "INNER JOIN [model2] AS m2 ON @3 WHERE (@4) AND (@5) " <>
       "GROUP BY @6, @7 HAVING (@8) AND (@9) " <>
-      "ORDER BY @10, m0.[x] OFFSET @12 ROW"
+      "ORDER BY @10, m0.[x] OFFSET @12 ROW FETCH NEXT @11 ROWS ONLY"
 
     assert SQL.all(query) == String.rstrip(result)
   end
@@ -600,18 +585,12 @@ defmodule Tds.Ecto.TdsTest do
                 {:remove, :summary}]}
 
     assert SQL.execute_ddl(alter) == """
-    ALTER TABLE [posts] ADD [title] nvarchar(100) NOT NULL ;
-    IF (OBJECT_ID('DF_title', 'D') IS NOT NULL)
-    BEGIN
-    ALTER TABLE [posts] DROP CONSTRAINT DF_title
-    END;
-    ALTER TABLE [posts] ADD CONSTRAINT DF_title DEFAULT N'Untitled' FOR [title];
-    ALTER TABLE [posts] ALTER COLUMN [price] numeric(8,2) NULL ;
-    IF (OBJECT_ID('DF_price', 'D') IS NOT NULL)
-    BEGIN
-    ALTER TABLE [posts] DROP CONSTRAINT DF_price
-    END;
-    ALTER TABLE [posts] DROP COLUMN [summary]
+    ALTER TABLE [posts] ADD [title] nvarchar(100) NOT NULL CONSTRAINT DF_title
+    DEFAULT N'Untitled'; ALTER TABLE [posts] ALTER COLUMN [price] numeric(8,2) NULL ;
+    IF (OBJECT_ID('DF_price', 'D') IS NOT NULL) BEGIN ALTER TABLE [posts]
+    DROP CONSTRAINT DF_price END; ALTER TABLE [posts] IF (OBJECT_ID('DF_summary', 'D')
+    IS NOT NULL) BEGIN ALTER TABLE [posts] DROP CONSTRAINT DF_summary END;
+    DROP COLUMN [summary]
     """ |> remove_newlines
   end
 

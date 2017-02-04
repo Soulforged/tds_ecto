@@ -28,6 +28,40 @@ defmodule Ecto.Integration.TestRepo do
     otp_app: :ecto
 end
 
+pool =
+  case System.get_env("ECTO_POOL") || "poolboy" do
+    "poolboy" -> DBConnection.Poolboy
+    "sbroker" -> DBConnection.Sojourn
+  end
+
+# Pool repo for non-async tests
+alias Ecto.Integration.PoolRepo
+
+Application.put_env(:ecto, PoolRepo,
+  adapter: Tds.Ecto,
+  pool: pool,
+  hostname: "mssql.local",
+  #instance: "soulcage",
+  username: "mssql",
+  password: "mssql",
+  database: "ecto_test",
+  pool_size: 10,
+  max_restarts: 20,
+  max_seconds: 10)
+
+defmodule Ecto.Integration.PoolRepo do
+  use Ecto.Integration.Repo, otp_app: :ecto
+
+  def create_prefix(prefix) do
+    "create schema #{prefix}"
+  end
+
+  def drop_prefix(prefix) do
+    "drop schema #{prefix}"
+  end
+end
+
+
 defmodule Ecto.Integration.Case do
   use ExUnit.CaseTemplate
 
@@ -39,12 +73,14 @@ defmodule Ecto.Integration.Case do
 end
 
 :erlang.system_flag :backtrace_depth, 50
+{:ok, _} = Tds.Ecto.ensure_all_started(TestRepo, :temporary)
 
 #_   = Tds.Ecto.storage_down(TestRepo.config)
 #:ok = Tds.Ecto.storage_up(TestRepo.config)
 
 {:ok, pid} = TestRepo.start_link
+{:ok, _pid} = PoolRepo.start_link
 
-# :ok = Ecto.Migrator.up(TestRepo, 0, Ecto.Integration.Migration, log: false)
+#:ok = Ecto.Migrator.up(TestRepo, 0, Ecto.Integration.Migration, log: false)
 Ecto.Adapters.SQL.Sandbox.mode(TestRepo, :manual)
 Process.flag(:trap_exit, true)

@@ -22,8 +22,8 @@ defmodule TDS.Ecto.Mixfile do
   defp deps do
     [
       {:ecto, "~> 2.1.3"},
-      # {:tds, git: "https://github.com/danielicardopcnt/tds.git", branch: "ecto2"},
-      {:tds, git: "file:///Users/danielicardo/Projects/tds/.git", branch: "ecto2revival"},
+      {:tds, git: "https://github.com/danielicardopcnt/tds.git", branch: "ecto2revival"},
+      #{:tds, git: "file:///Users/danielicardo/Projects/tds/.git", branch: "ecto2revival"},
       {:poison, only: :test}
     ]
   end

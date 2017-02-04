@@ -521,8 +521,8 @@ if Code.ensure_loaded?(Tds) do
     end
 
     defp limit(%Query{limit: nil}, _sources), do: ""
-    defp limit(%Query{limit: %QueryExpr{expr: expr}} = query, sources), do: "TOP(" <> expr(expr, sources, query) <> ") "
-    # defp limit(%Query{limit: %QueryExpr{expr: expr}, offset: _} = query, sources), do: ""
+    defp limit(%Query{limit: %QueryExpr{expr: expr}, offset: nil} = query, sources), do: "TOP(" <> expr(expr, sources, query) <> ") "
+    defp limit(%Query{limit: %QueryExpr{expr: expr}, offset: _} = query, sources), do: ""
 
     defp offset(%Query{offset: nil}, _sources), do: nil
     defp offset(%Query{offset: %QueryExpr{expr: offset_expr}, limit: %QueryExpr{expr: limit_expr}} = query, sources) do
@@ -569,9 +569,7 @@ if Code.ensure_loaded?(Tds) do
       Enum.map_join(fields, ", ", &"#{name}.#{quote_name(&1)}")
     end
 
-    defp expr({:in, _, [_left, []]}, _sources, _query) do
-      "0=1"
-    end
+    defp expr({:in, _, [_left, []]}, _sources, _query), do: "0=1"
 
     defp expr({:in, _, [left, right]}, sources, query) when is_list(right) do
       args = Enum.map_join right, ",", &expr(&1, sources, query)
