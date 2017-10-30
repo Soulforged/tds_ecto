@@ -610,23 +610,23 @@ if Code.ensure_loaded?(Tds) do
       |> IO.iodata_to_binary()
     end
 
-    # :^ - represents parameter ix is index number 
+    # :^ - represents parameter ix is index number
     defp expr({:^, [], [idx]}, _sources, _query) do
       "@#{idx + 1}"
     end
-    
-    # :. - attribure, table alias name can be get from sources by passing index 
+
+    # :. - attribure, table alias name can be get from sources by passing index
     defp expr({{:., _, [{:&, _, [idx]}, field]}, _, []}, sources, _query) when is_atom(field) do
       {_, name, _} = elem(sources, idx)
       "#{name}.#{quote_name(field)}"
     end
-    
+
     defp expr({:&, _, [idx]}, sources, query) do
-      {table, _name, _schema} = elem(sources, idx)      
+      {table, _name, _schema} = elem(sources, idx)
       error!(query, "TDS Adapter does not support selecting all fields from #{table} without a schema. " <>
                     "Please specify a schema or specify exactly which fields you want in projection")
     end
-    
+
     defp expr({:&, _, [idx, fields, _counter]}, sources, query) do
       {_table, name, schema} = elem(sources, idx)
       |> IO.inspect()
@@ -1090,7 +1090,11 @@ if Code.ensure_loaded?(Tds) do
     end
 
     defp column_change(statement_prefix, _table, {:remove, name}) do
-      [statement_prefix, "DROP COLUMN ", quote_name(name), "; "]
+      fk_name = constraint_name("DF", table, name)
+      [
+        [Utils.if_object_exists(true, fk_name, "DF", do: [statement_prefix, "DROP CONSTRAINT ", fk_name, "; "])],
+        [statement_prefix, "DROP COLUMN ", quote_name(name), "; "]
+      ]
     end
 
     defp column_options(table, name, opts) do
